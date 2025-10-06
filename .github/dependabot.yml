@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "08:00"
+    open-pull-requests-limit: 10
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "all"   # include transitives for better demos
+    groups:
+      low-and-moderate:
+        applies-to: security-updates
+        update-types: ["patch", "minor"]
+    labels: ["security", "dependabot"]
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    rebase-strategy: "auto"
