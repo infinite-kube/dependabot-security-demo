@@ -1,0 +1,49 @@
+name: Dependabot Security: Severity Labels & Safe Auto-merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  label-and-automerge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Dependabot metadata (CVSS, GHSA, etc.)
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          alert-lookup: true
+          github-token: ${{ secrets.DEPENDABOT_METADATA_PAT }}
+
+      # Map CVSS -> severity label
+      - name: Add severity label
+        if: ${{ steps.meta.outputs.ghsa-id != '' }}
+        run: |
+          CVSS="${{ steps.meta.outputs.cvss }}"
+          if (( $(echo "$CVSS >= 9.0" | bc -l) )); then SEV=critical;
+          elif (( $(echo "$CVSS >= 7.0" | bc -l) )); then SEV=high;
+          elif (( $(echo "$CVSS >= 4.0" | bc -l) )); then SEV=moderate;
+          elif (( $(echo "$CVSS > 0" | bc -l) )); then SEV=low;
+          else SEV=none; fi
+          echo "CVSS=$CVSS → severity=$SEV"
+          if [ "$SEV" != "none" ]; then
+            gh pr edit ${{ github.event.pull_request.number }} --add-label "security:${SEV}"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Safe auto-merge: only Low/Moderate security PRs
+      - name: Enable auto-merge for Low/Moderate security PRs
+        if: |
+          steps.meta.outputs.ghsa-id != '' &&
+          (contains(join(github.event.pull_request.labels.*.name, ' '), 'security:low') ||
+           contains(join(github.event.pull_request.labels.*.name, ' '), 'security:moderate'))
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          merge-method: squash
